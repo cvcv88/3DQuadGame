@@ -25,6 +25,7 @@ public class Player : MonoBehaviour
 	bool wDown; // Walk
 	bool jDown; // Jump
 	bool iDown; // Interaction
+	bool fDown; // Fire, Coroutine 기본공격
 
 	bool sDown1;
 	bool sDown2;
@@ -33,6 +34,7 @@ public class Player : MonoBehaviour
 	bool isJump;
 	bool isDodge;
 	bool isSwap;
+	bool isFireReady = true;
 
 	Vector3 moveVec;
 	Vector3 dodgeVec;
@@ -41,9 +43,12 @@ public class Player : MonoBehaviour
 	Animator anim;
 
 	GameObject nearObject;
-	GameObject equipWeapon;
+	// GameObject equipWeapon;
+	Weapon equipWeapon;
 
 	int equipWeaponIndex = -1;
+
+	float fireDelay; // Fire 기본공격 딜레이
 
 	private void Awake()
 	{
@@ -57,6 +62,7 @@ public class Player : MonoBehaviour
 		Move();
 		Turn();
 		Jump();
+		Attack();
 		Dodge();
 		Swap();
 		Interaction();
@@ -68,6 +74,7 @@ public class Player : MonoBehaviour
 		vAxis = Input.GetAxisRaw("Vertical");
 		wDown = Input.GetButton("Walk");
 		jDown = Input.GetButtonDown("Jump");
+		fDown = Input.GetButtonDown("Fire1");
 		iDown = Input.GetButtonDown("Interaction");
 		sDown1 = Input.GetButtonDown("Swap1");
 		sDown2 = Input.GetButtonDown("Swap2");
@@ -80,7 +87,7 @@ public class Player : MonoBehaviour
 		if (isDodge) // 지금 회피를 하고 있으면
 			moveVec = dodgeVec;
 
-		if (isSwap)
+		if (isSwap || !isFireReady) // 무기 변경 or 공격 중에는 이동 불가
 			moveVec = Vector3.zero;
 
 		transform.position += moveVec * speed * Time.deltaTime * (wDown ? 0.5f : 1f);
@@ -105,6 +112,22 @@ public class Player : MonoBehaviour
 		}
 	}
 
+	private void Attack()
+	{
+		if (equipWeapon == null) // 손에 아무것도 없으면
+			return;
+
+		// 공격딜레이에 시간 더해주고 공격 가능 여부 확인
+		fireDelay += Time.deltaTime;
+		isFireReady = equipWeapon.rate < fireDelay;
+
+		if (fDown && isFireReady && !isDodge && !isSwap)
+		{
+			equipWeapon.Use();
+			anim.SetTrigger("doSwing");
+			fireDelay = 0;
+		}
+	}
 	private void Dodge()
 	{
 		if (jDown && moveVec != Vector3.zero && !isJump && !isDodge && !isSwap)
@@ -141,11 +164,11 @@ public class Player : MonoBehaviour
 		if ((sDown1 || sDown2 || sDown3) && !isJump && !isDodge)
 		{
 			if (equipWeapon != null)
-				equipWeapon.SetActive(false);
+				equipWeapon.gameObject.SetActive(false);
 
 			equipWeaponIndex = weaponIndex;
-			equipWeapon = weapons[weaponIndex];
-			equipWeapon.SetActive(true);
+			equipWeapon = weapons[weaponIndex].GetComponent<Weapon>();
+			equipWeapon.gameObject.SetActive(true);
 
 			anim.SetTrigger("doSwap");
 
@@ -185,14 +208,14 @@ public class Player : MonoBehaviour
 
 	private void OnTriggerEnter(Collider other)
 	{
-		if(other.tag == "Item")
+		if (other.tag == "Item")
 		{
 			Item item = other.GetComponent<Item>();
 			switch (item.type)
 			{
 				case Item.Type.Ammo:
 					ammo += item.value;
-					if(ammo > maxAmmo)
+					if (ammo > maxAmmo)
 						ammo = maxAmmo;
 					break;
 				case Item.Type.Coin:
@@ -215,7 +238,7 @@ public class Player : MonoBehaviour
 					break;
 			}
 			Destroy(other.gameObject);
-		}	
+		}
 	}
 
 	private void OnTriggerStay(Collider other)
